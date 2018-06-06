@@ -5,11 +5,36 @@ use serde_json;
 use serde_json::Value;
 use doctor::Doctor;
 
+pub fn get_website(url: &str) -> String {
+    let content = util::get_url_content_https(url);
+    let document = Document::from(content.as_str());
 
+    let profile = match document.find(Attr("id", "profil_name_adresse")).next() {
+        Some(profile) => profile,
+        None => return "not found".into()
+    };
+
+    for div in profile.find(Name("div")) {
+        if div.find(Name("br")).count() == 1 {
+            if div.find(Name("a")).count() == 1 {
+                match div.find(Name("a")).next() {
+                    Some(a) => {
+                        let website = a.attr("href").unwrap();
+                        if website.contains("http") { return website.into(); }
+                        return "not found".into();
+                    },
+                    None => return "not found".into()
+                }
+            }
+        }
+    }
+    return "not found".into()
+}
 
 pub fn get_doctors(url: &str) -> Vec<Doctor> {
     let content = util::get_url_content_https(url);
     let document = Document::from(content.as_str());
+
 
     let script = document
         .find(Name("body")).next().unwrap()
@@ -22,17 +47,30 @@ pub fn get_doctors(url: &str) -> Vec<Doctor> {
 
     let json_value: Value = serde_json::from_str(&json_string).unwrap();
 
-    let results: Vec<Value> = serde_json::from_str(&json_value["search"]["searchResult"]["results"].to_string()).unwrap();
-
     let mut doctors = Vec::new();
 
+    let results: Vec<Value> = match serde_json::from_str(&json_value["search"]["searchResult"]["results"].to_string()) {
+        Ok(results) => results,
+        Err(_) => return doctors
+    };
+
     for result in results {
-        let name = result["name_nice"].to_string();
-        let address = result["strasse"].to_string();
-        let city = result["ort"].to_string();
-        let zip_code = result["plz"].to_string();
-        let phone = result["tel"].to_string();
-        doctors.push(Doctor { name: name, address: address, city: city, zip_code: zip_code, phone: phone, email: "".into(), website: "".into() } );
+        let name = result["name_nice"].as_str().unwrap_or("not found").into();
+        let address = result["strasse"].as_str().unwrap_or("not found").into();
+        let city = result["ort"].as_str().unwrap_or("not found").into();
+        let zip_code = result["plz"].as_str().unwrap_or("not found").into();
+        let phone = result["tel"].as_str().unwrap_or("not found").into();
+        let mut jameda_url = "jameda url not found".into();
+        if let Some(url) = result["url"].as_str() {
+            if let Some(url_hinten) = result["url_hinten"].as_str() {
+                jameda_url = format!("https://www.jameda.de{}uebersicht/{}", url, url_hinten);
+            }
+        }
+        doctors.push(Doctor { name: name, address: address, city: city, zip_code: zip_code, 
+            phone: phone, 
+            email: "".into(), 
+            jameda_url: jameda_url,
+            website: "".into()} );
     }
     doctors
 }
@@ -69,7 +107,7 @@ pub fn get_districts(url: &str) -> Vec<String> {
 
     let mut districts = Vec::new();
 
-    let div = match document.find(Class("sc-bHwgHz")).next() {
+    let div = match document.find(Class("sc-eMigcr")).next() {
         Some(div) => div,
         None => {
             districts.push(url.into());
@@ -79,9 +117,15 @@ pub fn get_districts(url: &str) -> Vec<String> {
 
     for ul in div.find(Name("ul")) {
         for li in ul.find(Name("li")) {
-            let a = li.find(Class("sc-gHboQg")).next().unwrap();
-            let district_url = a.attr("href").unwrap();
-            districts.push(format!("https://www.jameda.de{}", district_url));
+            match li.find(Class("sc-cpmLhU")).next() {
+                Some(a) => {
+                    let district_url = a.attr("href").unwrap();
+                    districts.push(format!("https://www.jameda.de{}", district_url));
+                },
+                None => {
+                    //println!("district not found");
+                }
+            }
         }
     }
     districts
