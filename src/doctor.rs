@@ -1,13 +1,13 @@
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Doctor {
-pub name: String,
-pub address: String,
-pub zip_code: String,
-pub city: String,
-pub phone: String,
-pub email: String,
-pub jameda_url: String,
-pub website: String
+    pub name: String,
+    pub address: String,
+    pub zip_code: String,
+    pub city: String,
+    pub phone: String,
+    pub email: String,
+    pub website: String,
+    pub jameda_url: String
 }
 
 impl PartialEq for Doctor {

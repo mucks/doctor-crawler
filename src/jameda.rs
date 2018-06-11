@@ -3,7 +3,7 @@ use select::document::Document;
 use select::predicate::{Name, Class, Attr};
 use serde_json;
 use serde_json::Value;
-use doctor::Doctor;
+use doctor::{self, Doctor};
 
 pub fn get_website(url: &str) -> String {
     let content = util::get_url_content_https(url);
@@ -29,6 +29,29 @@ pub fn get_website(url: &str) -> String {
         }
     }
     return "not found".into()
+}
+
+fn get_websites(doctors: &Vec<Doctor>) -> Vec<Doctor> {
+    let mut new_doctors = Vec::new();
+    let mut threads = Vec::new();
+
+    let doctor_chunks = doctor::split_array(&doctors);
+    for chunk in doctor_chunks {
+        let mut temp_chunk = chunk.clone();
+        threads.push(thread::spawn(move || {
+            for i in 0..chunk.len() {
+                let website = get_website(&chunk[i].jameda_url);
+                println!("{}: {}", i, website);
+                temp_chunk[i].website = website;
+            }
+            temp_chunk
+        }));
+    }
+
+    for t in threads {
+        new_doctors.extend(t.join().unwrap());
+    }
+    new_doctors
 }
 
 pub fn get_doctors(url: &str) -> Vec<Doctor> {
@@ -135,7 +158,7 @@ pub fn get_districts(url: &str) -> Vec<String> {
 use thread;
 
 pub fn get_all_doctors() -> Vec<Doctor> {
-    let THREAD_COUNT = 16;
+    let thread_count = 16;
 
     let cities = get_cities();
     let mut threads = Vec::new();
@@ -164,7 +187,7 @@ pub fn get_all_doctors() -> Vec<Doctor> {
             doctors
         }));
 
-        if count >= THREAD_COUNT {
+        if count >= thread_count {
             for t in more_threads {
                 let doctors = t.join().unwrap();
                 all_doctors.extend(doctors);
